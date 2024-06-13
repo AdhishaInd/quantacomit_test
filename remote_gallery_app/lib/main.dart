@@ -1,13 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_platform_widgets/flutter_platform_widgets.dart';
-
 import 'constants.dart';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; // aliasing http package
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:photo_view/photo_view.dart';
@@ -42,62 +37,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<String> photoUrls = []; // Stores photo URLs from server
   Set<String> selectedPhotos = {}; // Stores URLs of selected photos
-
-  Future<void> pickImage() async {
-    if (kIsWeb) {
-      await pickImageWeb();
-      return;
-    }
-
-    await pickImageMobile();
-  }
-
-  Future<void> pickImageMobile() async {
-    final pickedFile =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
-
-    if (pickedFile != null) {
-      print("This${pickedFile.path}");
-      // Upload image and update photoUrls on success
-      String uploadedUrl = await uploadImage(pickedFile.path);
-      setState(() {
-        photoUrls.add(uploadedUrl);
-      });
-    }
-  }
-
-  Future<void> pickImageWeb() async {
-    var picked = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (picked == null) return;
-    // Convert the file to bytes
-    var bytes = picked.files.first.bytes;
-    if (bytes == null) return;
-    // Upload image and update photoUrls on success
-    String uploadedUrl =
-        await uploadImageFromBytes(picked.files.first.name, bytes);
-    setState(() {
-      photoUrls.add(uploadedUrl);
-    });
-  }
-
-  Future<void> fetchPhotos() async {
-    final response = await http
-        .get(Uri.parse(baseUrl)); // Replace with your actual API endpoint
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as List;
-      setState(() {
-        for (var item in data) {
-          String photoName = item['imageName'];
-          List<String> parts = photoName.split('.');
-          photoUrls
-              .add('$baseUrl/photo?name=${parts[0]}&extension=${parts[1]}');
-        }
-      });
-    } else {
-      // Handle unsuccessful response (Throw Exception)
-      throw Exception('Failed to load photos: ${response.statusCode}');
-    }
-  }
 
   @override
   void initState() {
@@ -154,12 +93,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           const CircularProgressIndicator(),
                       errorWidget: (context, url, error) =>
                           const Icon(Icons.error),
+                      fit: BoxFit.cover,
+                      height: 200.0,
+                      width: 200.0,
                     ),
-                    // Visually differentiate selected photos (optional)
+                    // Visually differentiate selected photos
                     if (selectedPhotos.contains(photoUrls[index]))
                       Container(
-                        color:
-                            Colors.black26, // Example for selected background
+                        color: Colors
+                            .black26, // Darken the selected thumbnail background
                       ),
                   ]),
                 );
@@ -184,19 +126,87 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Replace with your actual upload logic using http package
-  Future<String> uploadImage(String imagePath) async {
-    // ... Upload logic and return uploaded image URL
-    // return 'https://img.freepik.com/free-photo/colorful-design-with-spiral-design_188544-9588.jpg';
+  // Platform-specific image picker
+  Future<void> pickImage() async {
+    if (kIsWeb) {
+      await pickImageWeb();
+      return;
+    }
+
+    await pickImageMobile();
+  }
+
+  // Image picker for Non-Web platforms
+  Future<void> pickImageMobile() async {
+    final pickedFile =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      // Upload image and update photoUrls on success
+      String uploadedUrl = await uploadImageFromPath(pickedFile.path);
+      setState(() {
+        photoUrls.add(uploadedUrl);
+      });
+    }
+  }
+
+  // Retrieve name list of photos from server
+  Future<void> fetchPhotos() async {
+    final response = await http.get(Uri.parse(baseUrl));
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as List;
+      setState(() {
+        for (var item in data) {
+          String photoName = item['imageName'];
+          List<String> parts = photoName.split('.');
+          photoUrls
+              .add('$baseUrl/photo?name=${parts[0]}&extension=${parts[1]}');
+        }
+      });
+    } else {
+      handleUploadError('Failed to fetch photos: ${response.statusCode}');
+      // Handle unsuccessful response (Throw Exception)
+      throw Exception('Failed to fetch photos: ${response.statusCode}');
+    }
+  }
+
+  // Image picker for Web platform
+  Future<void> pickImageWeb() async {
+    var picked = await FilePicker.platform.pickFiles(type: FileType.image);
+    if (picked == null) return;
+    // Convert the file to bytes
+    var bytes = picked.files.first.bytes;
+    if (bytes == null) return;
+    // Upload image and update photoUrls on success
+    String uploadedUrl =
+        await uploadImageFromBytes(picked.files.first.name, bytes);
+    setState(() {
+      photoUrls.add(uploadedUrl);
+    });
+  }
+
+  // Display a snackbar with the given message
+  void handleUploadError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red, // Adjust color for error indication
+      ),
+    );
+  }
+
+  // Upload image to server and return the URL
+  Future<String> uploadImage(http.MultipartFile multipartFile) async {
     var uri = Uri.parse('$baseUrl/upload');
     var request = http.MultipartRequest('POST', uri);
-    var multipartFile = await http.MultipartFile.fromPath('photo', imagePath);
     request.files.add(multipartFile);
     var response = await request.send();
 
     // Handle the response (failure)
     if (response.statusCode != 200) {
-      throw Exception('Failed to upload image');
+      handleUploadError('Failed to upload the photo: ${response.statusCode}');
+      // Handle unsuccessful response (Throw Exception)
+      throw Exception('Failed to upload the photo: ${response.statusCode}');
     }
 
     var data = jsonDecode(await response.stream.bytesToString());
@@ -205,28 +215,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return '$baseUrl/photo?name=${parts[0]}&extension=${parts[1]}';
   }
 
+  // Get multipart file from image path
+  Future<String> uploadImageFromPath(String imagePath) async {
+    var multipartFile = await http.MultipartFile.fromPath('photo', imagePath);
+    return uploadImage(multipartFile);
+  }
+
+  // Get multipart file from image bytes
   Future<String> uploadImageFromBytes(
       String filename, List<int> imageBytes) async {
-    // ... Upload logic and return uploaded image URL
-    // return 'https://img.freepik.com/free-photo/colorful-design-with-spiral-design_188544-9588.jpg';
-    var uri = Uri.parse('$baseUrl/upload');
-    var request = http.MultipartRequest('POST', uri);
     var multipartFile =
         http.MultipartFile.fromBytes('photo', imageBytes, filename: filename);
-    request.files.add(multipartFile);
-    var response = await request.send();
 
-    // Handle the response (failure)
-    if (response.statusCode != 200) {
-      throw Exception('Failed to upload image');
-    }
-
-    var data = jsonDecode(await response.stream.bytesToString());
-    List<String> parts = data['imageName'].split('.');
-
-    return '$baseUrl/photo?name=${parts[0]}&extension=${parts[1]}';
+    return uploadImage(multipartFile);
   }
 
+  // Delete selected photos
   Future<void> deleteSelectedPhotos() async {
     if (selectedPhotos.isEmpty) return; // Handle empty selection
 
@@ -267,6 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
             selectedPhotos.remove(photoUrl);
           });
         } else {
+          handleUploadError('Failed to delete photo: ${response.statusCode}');
           // Handle unsuccessful response (Throw Exception)
           throw Exception('Failed to delete photo: ${response.statusCode}');
         }
