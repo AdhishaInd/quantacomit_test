@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_platform_widgets/flutter_platform_widgets.dart';
 
 import 'constants.dart';
@@ -9,6 +11,7 @@ import 'package:http/http.dart' as http; // aliasing http package
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:photo_view/photo_view.dart';
+import 'package:flutter/foundation.dart';
 
 void main() {
   runApp(const MyApp());
@@ -41,6 +44,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Set<String> selectedPhotos = {}; // Stores URLs of selected photos
 
   Future<void> pickImage() async {
+    if (kIsWeb) {
+      await pickImageWeb();
+      return;
+    }
+
+    await pickImageMobile();
+  }
+
+  Future<void> pickImageMobile() async {
     final pickedFile =
         await ImagePicker().pickImage(source: ImageSource.gallery);
 
@@ -52,6 +64,20 @@ class _HomeScreenState extends State<HomeScreen> {
         photoUrls.add(uploadedUrl);
       });
     }
+  }
+
+  Future<void> pickImageWeb() async {
+    var picked = await FilePicker.platform.pickFiles(type: FileType.image);
+    if (picked == null) return;
+    // Convert the file to bytes
+    var bytes = picked.files.first.bytes;
+    if (bytes == null) return;
+    // Upload image and update photoUrls on success
+    String uploadedUrl =
+        await uploadImageFromBytes(picked.files.first.name, bytes);
+    setState(() {
+      photoUrls.add(uploadedUrl);
+    });
   }
 
   Future<void> fetchPhotos() async {
@@ -165,6 +191,28 @@ class _HomeScreenState extends State<HomeScreen> {
     var uri = Uri.parse('$baseUrl/upload');
     var request = http.MultipartRequest('POST', uri);
     var multipartFile = await http.MultipartFile.fromPath('photo', imagePath);
+    request.files.add(multipartFile);
+    var response = await request.send();
+
+    // Handle the response (failure)
+    if (response.statusCode != 200) {
+      throw Exception('Failed to upload image');
+    }
+
+    var data = jsonDecode(await response.stream.bytesToString());
+    List<String> parts = data['imageName'].split('.');
+
+    return '$baseUrl/photo?name=${parts[0]}&extension=${parts[1]}';
+  }
+
+  Future<String> uploadImageFromBytes(
+      String filename, List<int> imageBytes) async {
+    // ... Upload logic and return uploaded image URL
+    // return 'https://img.freepik.com/free-photo/colorful-design-with-spiral-design_188544-9588.jpg';
+    var uri = Uri.parse('$baseUrl/upload');
+    var request = http.MultipartRequest('POST', uri);
+    var multipartFile =
+        http.MultipartFile.fromBytes('photo', imageBytes, filename: filename);
     request.files.add(multipartFile);
     var response = await request.send();
 
