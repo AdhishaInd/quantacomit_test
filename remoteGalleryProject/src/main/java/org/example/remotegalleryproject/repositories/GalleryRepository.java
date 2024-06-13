@@ -1,11 +1,9 @@
 package org.example.remotegalleryproject.repositories;
 
-import org.apache.commons.io.IOUtils;
 import org.example.remotegalleryproject.entities.ImageDetails;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,7 +18,7 @@ public class GalleryRepository {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get("src/main/resources/uploads/"))){
             for (Path path: stream) {
                 if (!Files.isDirectory(path)) {
-                    photoList.add(new ImageDetails(path.getFileName().toString(), ""));
+                    photoList.add(new ImageDetails(path.getFileName().toString()));
                 }
             }
         }
@@ -34,7 +32,7 @@ public class GalleryRepository {
         Files.createFile(Paths.get("src/main/resources/uploads/" + photo.getOriginalFilename()));
         Files.write(filePath, bytes);
 
-        return new ImageDetails(photo.getOriginalFilename(), "");
+        return new ImageDetails(photo.getOriginalFilename());
     }
 
     public Iterable<ImageDetails> deleteFile(String filename) throws IOException{
@@ -46,10 +44,6 @@ public class GalleryRepository {
     }
 
     public byte[] loadPhoto(String filename) throws IOException{
-//        try (InputStream in = getClass().getResourceAsStream("/uploads/" + filename)) {
-//            assert in != null;
-//            return IOUtils.toByteArray(in);
-//        }
         Path path = Paths.get("src/main/resources/uploads/" + filename);
         return Files.readAllBytes(path);
 
