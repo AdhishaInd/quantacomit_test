@@ -10,6 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/gallery")
+@CrossOrigin(origins = "*")
 public class GalleryController {
 
     private final GalleryRepository galleryRepository = new GalleryRepository();
