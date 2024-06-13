@@ -1,5 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter_platform_widgets/flutter_platform_widgets.dart';
+
+import 'constants.dart';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http; // aliasing http package
 import 'package:image_picker/image_picker.dart';
@@ -39,7 +43,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> pickImage() async {
     final pickedFile =
         await ImagePicker().pickImage(source: ImageSource.gallery);
+
     if (pickedFile != null) {
+      print("This${pickedFile.path}");
       // Upload image and update photoUrls on success
       String uploadedUrl = await uploadImage(pickedFile.path);
       setState(() {
@@ -49,16 +55,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> fetchPhotos() async {
-    final response = await http.get(Uri.parse(
-        'http://10.0.2.2:8080/gallery')); // Replace with your actual API endpoint
+    final response = await http
+        .get(Uri.parse(baseUrl)); // Replace with your actual API endpoint
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List;
       setState(() {
         for (var item in data) {
           String photoName = item['imageName'];
           List<String> parts = photoName.split('.');
-          photoUrls.add(
-              'http://10.0.2.2:8080/gallery/photo?name=${parts[0]}&extension=${parts[1]}');
+          photoUrls
+              .add('$baseUrl/photo?name=${parts[0]}&extension=${parts[1]}');
         }
       });
     } else {
@@ -140,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: FloatingActionButton.extended(
-                  onPressed: pickImage,
+                  onPressed: () => pickImage(),
                   label: const Text('Pick Image'),
                   icon: const Icon(Icons.add_a_photo),
                 ),
@@ -156,8 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<String> uploadImage(String imagePath) async {
     // ... Upload logic and return uploaded image URL
     // return 'https://img.freepik.com/free-photo/colorful-design-with-spiral-design_188544-9588.jpg';
-
-    var uri = Uri.parse('http://10.0.2.2:8080/gallery/upload');
+    var uri = Uri.parse('$baseUrl/upload');
     var request = http.MultipartRequest('POST', uri);
     var multipartFile = await http.MultipartFile.fromPath('photo', imagePath);
     request.files.add(multipartFile);
@@ -171,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
     var data = jsonDecode(await response.stream.bytesToString());
     List<String> parts = data['imageName'].split('.');
 
-    return 'http://10.0.2.2:8080/gallery/photo?name=${parts[0]}&extension=${parts[1]}';
+    return '$baseUrl/photo?name=${parts[0]}&extension=${parts[1]}';
   }
 
   Future<void> deleteSelectedPhotos() async {
